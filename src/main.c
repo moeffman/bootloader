@@ -1,4 +1,8 @@
-// © 2024 Oskar Arnudd
+/*
+ * bootloader.c - USART bootloader for STM32G0
+ * MIT License — Copyright (c) 2025 Oskar Arnudd
+ * See LICENSE file for details.
+ */
 
 #include "main.h"
 #include <stdint.h>
