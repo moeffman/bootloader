@@ -2,13 +2,13 @@
 # Project Configuration
 # ================================
 TARGET     = bootloader
-LINKER     = ../libs/linkers/stm32g071rb_bootloader.ld
+LINKER     = bootloader.ld
 SRC_DIR    = src
 INC_DIR    = inc
 BUILD_DIR  = build
 
-STARTUP    = ../libs/stm32g071rb/src/startup_stm32g071rb.c
-SYSCALLS   = ../libs/stm32g071rb/src/syscalls.c
+STARTUP    = startup.c
+SYSCALLS   = syscalls.c
 
 # ================================
 # Toolchain
@@ -46,9 +46,7 @@ LDFLAGS     = -T $(LINKER)
 # ================================
 SRCS = $(wildcard $(SRC_DIR)/*.c)
 
-OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS)) \
-       $(BUILD_DIR)/startup_stm32g071rb.o \
-       $(BUILD_DIR)/syscalls.o
+OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
 
 # ================================
 # Build Rules
@@ -65,16 +63,6 @@ $(BUILD_DIR):
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 	@$(CC) $(CFLAGS) -c $< -o $@
 	@echo Compiling $<...
-
-# Compile startup file
-$(BUILD_DIR)/startup_stm32g071rb.o: $(STARTUP)
-	@$(CC) $(CFLAGS) -c $< -o $@
-	@echo Compiling startup file $<...
-
-# Compile syscalls file
-$(BUILD_DIR)/syscalls.o: $(SYSCALLS)
-	@$(CC) $(CFLAGS) -c $< -o $@
-	@echo Compiling syscalls file $<...
 
 # Link everything into the ELF
 $(TARGET).elf: $(OBJS)
