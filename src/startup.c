@@ -54,49 +54,50 @@ void AES_RNG_IRQHandler(void) __attribute__((weak, alias("Default_Handler")));
 /* Vector table */
 #define VECTOR_TABLE_SIZE (48U)
 __attribute__((used, section(".vector_table")))
-static void (*vector_table[VECTOR_TABLE_SIZE])(void) = {
-    (void (*)(void))(&_estack),          /* Initial stack pointer */
-    Reset_Handler,                      /* Reset handler */
-    NMI_Handler,                        /* NMI handler */
-    HardFault_Handler,                  /* Hard fault handler */
-    0, 0, 0, 0, 0, 0, 0,                /* Reserved */
-    SVC_Handler,                        /* SVCall handler */
-    0, 0,                               /* Reserved */
-    PendSV_Handler,                     /* PendSV handler */
-    SysTick_Handler,                    /* SysTick handler */
-    WWDG_IRQHandler,                    /* Window Watchdog */
-    PVD_IRQHandler,                     /* PVD */
-    RTC_IRQHandler,                     /* RTC */
-    FLASH_IRQHandler,                   /* Flash */
-    RCC_IRQHandler,                     /* RCC */
-    EXTI0_1_IRQHandler,                 /* EXTI Line 0 and 1 */
-    EXTI2_3_IRQHandler,                 /* EXTI Line 2 and 3 */
-    EXTI4_15_IRQHandler,                /* EXTI Line 4 to 15 */
-    UCPD1_UCPD2_USB_IRQHandler,         /* UCPD1 / UCPD2 / USB */
-    DMA1_Channel1_IRQHandler,           /* DMA1 Channel 1 */
-    DMA1_Channel2_3_IRQHandler,         /* DMA1 Channel 2 and 3 */
-    DMA1_Ch4_7_DMAMUX1_OVR_IRQHandler,  /* DMA1 Channel 4-7, DMAMUX */
-    ADC1_IRQHandler,                    /* ADC1 */
-    TIM1_BRK_UP_TRG_COM_IRQHandler,     /* TIM1 Break, Update, Trigger, Commutation */
-    TIM1_CC_IRQHandler,                 /* TIM1 Capture Compare */
-    TIM2_IRQHandler,                    /* TIM2 */
-    TIM3_IRQHandler,                    /* TIM3 */
-    TIM6_IRQHandler,                    /* TIM6 */
-    TIM7_IRQHandler,                    /* TIM7 */
-    TIM14_IRQHandler,                   /* TIM14 */
-    TIM15_IRQHandler,                   /* TIM15 */
-    TIM16_IRQHandler,                   /* TIM16 */
-    TIM17_IRQHandler,                   /* TIM17 */
-    I2C1_IRQHandler,                    /* I2C1 */
-    I2C2_IRQHandler,                    /* I2C2 */
-    SPI1_IRQHandler,                    /* SPI1 */
-    SPI2_IRQHandler,                    /* SPI2 */
-    USART1_IRQHandler,                  /* USART1 */
-    USART2_IRQHandler,                  /* USART2 */
-    USART3_6_LPUART1_IRQHandler,        /* LPUART1 */
-    CEC_IRQHandler,                     /* LPTIM1 */
-    AES_RNG_IRQHandler,                 /* LPTIM2 */
+const uintptr_t vector_table[VECTOR_TABLE_SIZE] = {
+    (uintptr_t)&_estack,                            /* Initial stack pointer */
+    (uintptr_t)Reset_Handler,                       /* Reset handler */
+    (uintptr_t)NMI_Handler,                         /* NMI handler */
+    (uintptr_t)HardFault_Handler,                   /* Hard fault handler */
+    (uintptr_t)0, 0, 0, 0, 0, 0, 0,                 /* Reserved */
+    (uintptr_t)SVC_Handler,                         /* SVCall handler */
+    (uintptr_t)0, 0,                                /* Reserved */
+    (uintptr_t)PendSV_Handler,                      /* PendSV handler */
+    (uintptr_t)SysTick_Handler,                     /* SysTick handler */
+    (uintptr_t)WWDG_IRQHandler,                     /* Window Watchdog */
+    (uintptr_t)PVD_IRQHandler,                      /* PVD */
+    (uintptr_t)RTC_IRQHandler,                      /* RTC */
+    (uintptr_t)FLASH_IRQHandler,                    /* Flash */
+    (uintptr_t)RCC_IRQHandler,                      /* RCC */
+    (uintptr_t)EXTI0_1_IRQHandler,                  /* EXTI Line 0 and 1 */
+    (uintptr_t)EXTI2_3_IRQHandler,                  /* EXTI Line 2 and 3 */
+    (uintptr_t)EXTI4_15_IRQHandler,                 /* EXTI Line 4 to 15 */
+    (uintptr_t)UCPD1_UCPD2_USB_IRQHandler,          /* UCPD1 / UCPD2 / USB */
+    (uintptr_t)DMA1_Channel1_IRQHandler,            /* DMA1 Channel 1 */
+    (uintptr_t)DMA1_Channel2_3_IRQHandler,          /* DMA1 Channel 2 and 3 */
+    (uintptr_t)DMA1_Ch4_7_DMAMUX1_OVR_IRQHandler,   /* DMA1 Channel 4-7, DMAMUX */
+    (uintptr_t)ADC1_IRQHandler,                     /* ADC1 */
+    (uintptr_t)TIM1_BRK_UP_TRG_COM_IRQHandler,      /* TIM1 Break, Update, Trigger, Commutation */
+    (uintptr_t)TIM1_CC_IRQHandler,                  /* TIM1 Capture Compare */
+    (uintptr_t)TIM2_IRQHandler,                     /* TIM2 */
+    (uintptr_t)TIM3_IRQHandler,                     /* TIM3 */
+    (uintptr_t)TIM6_IRQHandler,                     /* TIM6 */
+    (uintptr_t)TIM7_IRQHandler,                     /* TIM7 */
+    (uintptr_t)TIM14_IRQHandler,                    /* TIM14 */
+    (uintptr_t)TIM15_IRQHandler,                    /* TIM15 */
+    (uintptr_t)TIM16_IRQHandler,                    /* TIM16 */
+    (uintptr_t)TIM17_IRQHandler,                    /* TIM17 */
+    (uintptr_t)I2C1_IRQHandler,                     /* I2C1 */
+    (uintptr_t)I2C2_IRQHandler,                     /* I2C2 */
+    (uintptr_t)SPI1_IRQHandler,                     /* SPI1 */
+    (uintptr_t)SPI2_IRQHandler,                     /* SPI2 */
+    (uintptr_t)USART1_IRQHandler,                   /* USART1 */
+    (uintptr_t)USART2_IRQHandler,                   /* USART2 */
+    (uintptr_t)USART3_6_LPUART1_IRQHandler,         /* LPUART1 */
+    (uintptr_t)CEC_IRQHandler,                      /* LPTIM1 */
+    (uintptr_t)AES_RNG_IRQHandler,                  /* LPTIM2 */
 };
+
 /* Reset handler */
 void Reset_Handler(void) {
 
