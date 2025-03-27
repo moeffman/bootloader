@@ -1,5 +1,5 @@
 /*
- * bootloader.c - USART bootloader for STM32G0
+ * bootloader.h - USART bootloader for STM32G0
  * MIT License — Copyright (c) 2025 Oskar Arnudd
  * See LICENSE file for details.
  */
@@ -91,10 +91,9 @@
 #define APP_MEMORY_START 0x08004000
 #define APP_MEMORY_END 0x08020000
 #define VECTOR_TABLE_SIZE 0xC0
-#define MESSAGE_MAX_LENGTH 3
 #define CHUNK_SIZE 256
-#define BUFFER_SIZE 20000
-#define BOOTLOADER_WAIT_TIME 1
+#define FIRMWARE_MAX_SIZE 20000
+#define BOOTLOADER_WAIT_TIME 3
 
 typedef enum{
     BLSTATE_IDLE,

@@ -10,9 +10,8 @@
 
 update_state_t update_state = USTATE_HANDSHAKE;
 bootloader_state_t bootloader_state = BLSTATE_IDLE;
-static int16_t timer = 0;
 static uint8_t firmware_update_start_timer = BOOTLOADER_WAIT_TIME;
-static uint8_t firmware_data[BUFFER_SIZE];
+static uint8_t firmware_data[FIRMWARE_MAX_SIZE];
 static uint32_t firmware_data_index = 0;
 static uint32_t firmware_size = 0;
 static uint8_t firmware_size_index = 0;
@@ -41,9 +40,6 @@ int main(void)
     init_peripherals();
 
     while (1) {
-        // Maybe present user with a simple choice of firmware updating
-        // or booting to application
-
         if(bootloader_state == BLSTATE_JUMPTOAPP){
             jump_to_application();
         }
@@ -119,11 +115,11 @@ static void init_peripherals(void)
     // Re-initialize counter
     TIM14_EGR |= BIT0;
 
-    // Prescaler set to 15999 (16MHz / 1MHz)-1
-    TIM14_PSC = 0x0F;
+    // Prescaler 15999Hz => Timer clock : (16MHz / (15999Hz + 1)) = 1000Hz
+    TIM14_PSC = 0x3E7F;
 
-    // Auto-reload value set to 999, making it fire the interrupt every millisecond
-    TIM14_ARR = 999;
+    // Auto-reload value set to 999, making it fire every second
+    TIM14_ARR = 0x3E7;
 
     // Counter enabled
     TIM14_CR1 |= BIT0;
@@ -437,9 +433,6 @@ void USART2_IRQHandler(void)
             switch (update_state) {
                 case USTATE_HANDSHAKE:
                     if(data == 'U'){
-                        // Start a timer to get out of updating
-                        // if it takes too long
-                        //
                         usart_send_string("ACK");
                     }else if(data == 'A'){
                         update_state++;
@@ -486,9 +479,7 @@ void TIM14_IRQHandler(void)
     // Clearing update interrupt flag
     TIM14_SR &= ~BIT0;
 
-    if(++timer > 1000 && bootloader_state == BLSTATE_IDLE){
-        timer = 0;
-
+    if(bootloader_state == BLSTATE_IDLE){
         if(--firmware_update_start_timer <= 0){
             bootloader_state = BLSTATE_JUMPTOAPP;
         }
