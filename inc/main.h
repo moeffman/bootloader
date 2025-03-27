@@ -4,8 +4,8 @@
  * See LICENSE file for details.
  */
 
-#ifndef APP_H
-#define APP_H
+#ifndef BOOTLOADER_H
+#define BOOTLOADER_H
 
 #include <stdint.h>
 

@@ -10,7 +10,8 @@
 
 update_state_t update_state = USTATE_HANDSHAKE;
 bootloader_state_t bootloader_state = BLSTATE_IDLE;
-static uint8_t firmware_update_start_timer = BOOTLOADER_WAIT_TIME;
+
+static uint8_t application_start_timer = BOOTLOADER_WAIT_TIME;
 static uint8_t firmware_data[FIRMWARE_MAX_SIZE];
 static uint32_t firmware_data_index = 0;
 static uint32_t firmware_size = 0;
@@ -19,13 +20,13 @@ static uint32_t CRC = 0;
 static uint8_t CRC_index = 0;
 
 static uint32_t calculate_checksum();
+static void firmware_update();
 static void flash_erase(void);
 static void flash_page_erase(uint32_t address);
 static void flash_region_erase(uint32_t start, uint32_t end);
 static void flash_unlock(void);
 static void flash_lock(void);
 static void flash_write_64(uint32_t address, uint8_t* buffer, uint32_t buffer_length);
-static void firmware_update();
 static void jump_to_application(void);
 
 static void init_peripherals(void);
@@ -41,6 +42,7 @@ int main(void)
 
     while (1) {
         if(bootloader_state == BLSTATE_JUMPTOAPP){
+            usart_send_string("ACK");
             jump_to_application();
         }
 
@@ -51,7 +53,7 @@ int main(void)
         }
 
         if(bootloader_state == BLSTATE_UPDATING){
-            firmware_update_start_timer = BOOTLOADER_WAIT_TIME;
+            application_start_timer = BOOTLOADER_WAIT_TIME;
         }
     }
 }
@@ -140,7 +142,7 @@ static uint32_t calculate_checksum()
     // REV_IN 11 - Bit reversal done by word
     CRC_CR |= (0x3 << 5);
 
-    for(int i = 0; i < firmware_size; i+=4){
+    for(uint32_t i = 0; i < firmware_size; i+=4){
         uint32_t word = 0;
 
         word |= firmware_data[i];
@@ -280,8 +282,8 @@ static void usart_send_byte(uint8_t byte)
 static void usart_send_number(uint32_t number)
 {
     char buffer[11];  // Max 10 digits + null terminator
-    int index = 10;  // Start at last position
-    buffer[index] = '\0';  // Null-terminate string
+    int index = 10;
+    buffer[index] = '\0';
 
     if (number == 0) {
         usart_send_byte('0');
@@ -294,7 +296,7 @@ static void usart_send_number(uint32_t number)
         number /= 10;
     }
 
-    usart_send_string(&buffer[index]);  // Send only valid part
+    usart_send_string(&buffer[index]);
 }
 
 static void firmware_update()
@@ -311,9 +313,7 @@ static void firmware_update()
         flash_write_64(APP_MEMORY_START, firmware_data, firmware_size);
         usart_send_string("Flash written!\r\n");
         flash_lock();
-        usart_send_string("Firmware update completed!\r\n");
-
-        usart_send_string("Starting application..\r\n");
+        usart_send_string("Firmware update completed, starting application..\r\n");
 }
 
 static void jump_to_application(void)
@@ -334,8 +334,6 @@ static void jump_to_application(void)
     for(uint32_t i = 0; i < VECTOR_TABLE_SIZE / 4; i++){
         sram_vector[i] = app_vector[i];
     }
-
-    for (volatile int i = 0; i < 10000; i++);
 
     uint32_t app_stack = app_vector[0];
     uint32_t app_reset = app_vector[1];
@@ -427,9 +425,7 @@ void USART2_IRQHandler(void)
             if(data == 'U'){
                 bootloader_state = BLSTATE_UPDATING;
             }
-        }
-
-        if(bootloader_state == BLSTATE_UPDATING){
+        }else if(bootloader_state == BLSTATE_UPDATING){
             switch (update_state) {
                 case USTATE_HANDSHAKE:
                     if(data == 'U'){
@@ -455,6 +451,7 @@ void USART2_IRQHandler(void)
 
                     if(firmware_data_index >= firmware_size){
                         update_state++;
+                        usart_send_string("ACK");
                     }
                 break;
 
@@ -480,7 +477,7 @@ void TIM14_IRQHandler(void)
     TIM14_SR &= ~BIT0;
 
     if(bootloader_state == BLSTATE_IDLE){
-        if(--firmware_update_start_timer <= 0){
+        if(application_start_timer-- < 1){
             bootloader_state = BLSTATE_JUMPTOAPP;
         }
     }
