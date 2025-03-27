@@ -27,7 +27,7 @@ MCUFLAGS   = -mcpu=cortex-m0plus -mthumb
 CORE_CFLAGS = -nostdlib -nostartfiles
 
 # Optional (can toggle for release builds)
-DEBUGFLAGS  = -g -Wall -Wpedantic -fstack-usage
+DEBUGFLAGS  = -g -Wall -Wpedantic -Werror -fstack-usage
 
 # Include directories
 INCLUDES    = -I$(INC_DIR)
