@@ -103,7 +103,7 @@ static void init_peripherals(void)
     USART2_CR1 |= BIT0;
 
     // Enable USART2 in NVIC
-    NVIC |= (BIT28);
+    NVIC_ISER |= (BIT28);
 
     // TIM14 init
     // RCC enable TIM14
@@ -125,7 +125,7 @@ static void init_peripherals(void)
     TIM14_CR1 |= BIT0;
 
     // Enable TIM14 in NVIC
-    NVIC |= (BIT19);
+    NVIC_ISER |= (BIT19);
 }
 
 static uint32_t calculate_checksum()
@@ -412,9 +412,9 @@ static void deinit_peripherals(void)
 
     // NVIC
     // TIM_14
-    NVIC &= ~BIT19;
+    NVIC_ICER |= BIT19;
     // USART2
-    NVIC &= ~BIT28;
+    NVIC_ICER |= BIT28;
 }
 
 void USART2_IRQHandler(void)

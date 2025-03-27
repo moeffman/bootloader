@@ -33,7 +33,8 @@
 #define SYSCFG_CFGR1    (*(volatile uint32_t*)(SYSCFG_BASE + 0x00))
 
 #define NVIC_BASE       (0xE000E100)
-#define NVIC            (*(volatile uint32_t*)(NVIC_BASE + 0x00))
+#define NVIC_ISER       (*(volatile uint32_t*)(NVIC_BASE + 0x00))
+#define NVIC_ICER       (*(volatile uint32_t*)(NVIC_BASE + 0x80))
 
 #define CRC_BASE        (0x40023000)
 #define CRC_DR          (*(volatile uint32_t*)(CRC_BASE + 0x00))
