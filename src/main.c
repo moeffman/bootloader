@@ -322,14 +322,14 @@ static void firmware_update()
 
 static void jump_to_application(void)
 {
-    // Disable interrupts
-    TIM14_CR1 &= ~BIT0;
-
-    // RCC enable SYSCFG
-    RCC_APBENR2 |= BIT0;
+    // Disable IRQs
+    __asm volatile ("cpsid i");
 
     uint32_t* app_vector = (uint32_t*)(APP_MEMORY_START);
     uint32_t* sram_vector = (uint32_t*)(0x20000000);
+
+    // RCC enable SYSCFG
+    RCC_APBENR2 |= BIT0;
 
     // SYSCFG_CFGR1 MEM_MODE
     SYSCFG_CFGR1 &= ~0x3;
@@ -354,7 +354,7 @@ static void jump_to_application(void)
     // Set MSP to applications stack
     __asm volatile ("msr msp, %0" :: "r" (app_stack));
 
-    // Jump to apps reset handler
+    // Jump to application reset handler
     void (*app_reset_handler)(void) = (void (*)(void)) app_reset;
     app_reset_handler();
 }
@@ -375,6 +375,13 @@ static void deinit_peripherals(void)
 
     // CRC_CR
     CRC_CR = 0;
+
+    // TIM_14 CR1
+    TIM14_CR1 = 0;
+    TIM14_DIER = 0;
+    TIM14_EGR = 0;
+    TIM14_PSC = 0;
+    TIM14_ARR = 0xFFFF;
 
     // RCC_IOPRSTR
     // GPIOA
@@ -406,6 +413,12 @@ static void deinit_peripherals(void)
     RCC_APBRSTR2 |= BIT15;
     RCC_APBRSTR2 &= ~BIT15;
     RCC_APBENR2 &= ~BIT15;
+
+    // NVIC
+    // TIM_14
+    NVIC &= ~BIT19;
+    // USART2
+    NVIC &= ~BIT28;
 }
 
 void USART2_IRQHandler(void)

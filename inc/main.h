@@ -33,19 +33,19 @@
 #define SYSCFG_CFGR1    (*(volatile uint32_t*)(SYSCFG_BASE + 0x00))
 
 #define NVIC_BASE       (0xE000E100)
-#define NVIC            *(volatile int32_t*)(NVIC_BASE + 0x00)
+#define NVIC            (*(volatile uint32_t*)(NVIC_BASE + 0x00))
 
 #define CRC_BASE        (0x40023000)
 #define CRC_DR          (*(volatile uint32_t*)(CRC_BASE + 0x00))
 #define CRC_CR          (*(volatile uint32_t*)(CRC_BASE + 0x08))
 
 #define TIM14_BASE      (0x40002000)
-#define TIM14_CR1       (*(volatile uint32_t*)(TIM14_BASE + 0x00))
-#define TIM14_SR        (*(volatile uint32_t*)(TIM14_BASE + 0x10))
-#define TIM14_DIER      (*(volatile uint32_t*)(TIM14_BASE + 0x0C))
-#define TIM14_EGR       (*(volatile uint32_t*)(TIM14_BASE + 0x14))
-#define TIM14_PSC       (*(volatile uint32_t*)(TIM14_BASE + 0x28))
-#define TIM14_ARR       (*(volatile uint32_t*)(TIM14_BASE + 0x2C))
+#define TIM14_CR1       (*(volatile uint16_t*)(TIM14_BASE + 0x00))
+#define TIM14_DIER      (*(volatile uint16_t*)(TIM14_BASE + 0x0C))
+#define TIM14_SR        (*(volatile uint16_t*)(TIM14_BASE + 0x10))
+#define TIM14_EGR       (*(volatile uint16_t*)(TIM14_BASE + 0x14))
+#define TIM14_PSC       (*(volatile uint16_t*)(TIM14_BASE + 0x28))
+#define TIM14_ARR       (*(volatile uint16_t*)(TIM14_BASE + 0x2C))
 
 #define USART2_BASE     (0x40004400)
 #define USART2_CR1      (*(volatile uint32_t*)(USART2_BASE + 0x00))
