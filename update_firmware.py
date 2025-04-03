@@ -8,9 +8,10 @@ import enum
 
 # Configuration
 PORT = "/dev/ttyACM0"
-BAUDRATE = 115200
+BAUDRATE_APP = 115200
+BAUDRATE_BL = 460800
 debug_print = False
-chunk_size = 256
+chunk_size = 512
 kill_screen = True
 
 FIRMWARE_FILE = sys.argv[1] + ".bin"  # Firmware file
@@ -45,7 +46,7 @@ def read_message(ser, size, blocking=False):
         if response:
             decoded = response.decode(errors="ignore").strip()
             if debug_print:
-                print(f"{decoded}")
+                print(f"\nSTM32: {decoded}\n")
             return decoded
     except serial.Timeout:
         ser.timeout = 0.2
@@ -72,8 +73,11 @@ def send_firmware():
     print("Waiting for handshake..")
 
     state = State.HANDSHAKE
+    with serial.Serial(PORT, BAUDRATE_APP) as ser:
+        # The flash command makes the application jump back to bootloader
+        ser.write(b"\rflash\r")
 
-    with serial.Serial(PORT, BAUDRATE) as ser:
+    with serial.Serial(PORT, BAUDRATE_BL) as ser:
         ser.timeout = 0.1
 
         firmware_size_bytes = struct.pack(">I", len(firmware_data))
@@ -82,19 +86,26 @@ def send_firmware():
         crc = zlib.crc32(firmware_data) & 0xFFFFFFFF
         crc_bytes = struct.pack(">I", crc)
 
+        ser.write(b"\r")
+        ser.write(b"flash")
+        ser.write(b"\r")
+
+        for i in range(1, 1000):
+            ser.timeout = 0
+            if not ser.readline():
+                break
+
         while True:
             time.sleep(0.1)
             match state:
                 case State.HANDSHAKE:
                     ser.write(b"U")
-                    time.sleep(0.1)
-                    msg = read_message(ser, 3)
+                    msg = read_message(ser, 0)
                     if msg and "ACK" in msg:
                         ser.write(b"A")
-                        time.sleep(0.1)
                         msg = read_message(ser, 3)
                         if msg and "ACK" in msg:
-                            print("Handshake completed, updating..")
+                            print("Handshake completed, sending size..")
                             state = State.SIZE
 
                 case State.SIZE:
@@ -102,8 +113,11 @@ def send_firmware():
                     msg = read_message(ser, len(str(len(firmware_data))))
                     if msg and str(len(firmware_data)) in msg:
                         state = State.FILE
+                    elif msg and "FTL" in msg:
+                        print("Firmware size too large, exiting.")
+                        return
                     else:
-                        time.sleep(1.0)
+                        time.sleep(0.1)
 
                 case State.FILE:
                     for i in range(0, len(firmware_data), chunk_size):
@@ -131,6 +145,10 @@ def send_firmware():
                         if "ACK" in msg:
                             break
                         print(msg)
+
+        if debug_print:
+            while True:
+                msg = read_message(ser, 0)
 
 
 if __name__ == "__main__":

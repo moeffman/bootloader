@@ -24,10 +24,19 @@
 #define RCC_APBENR1     (*(volatile uint32_t*)(RCC_BASE + 0x3C))
 #define RCC_APBENR2     (*(volatile uint32_t*)(RCC_BASE + 0x40))
 
+#define RCC_GPIOA           (1 << 0)
+#define RCC_FLASH           (1 << 8)
+#define RCC_CRC             (1 << 12)
+#define RCC_SYSCFG          (1 << 0)
+#define RCC_TIM14           (1 << 15)
+#define RCC_USART2          (1 << 17)
+
 #define GPIOA_BASE      (0x50000000)
 #define GPIOA_MODER     (*(volatile uint32_t*)(GPIOA_BASE + 0x00))
 #define GPIOA_OSPEEDR   (*(volatile uint32_t*)(GPIOA_BASE + 0x08))
 #define GPIOA_AFRL      (*(volatile uint32_t*)(GPIOA_BASE + 0x20))
+
+#define GPIO_MODER_AF       (0x3)
 
 #define SYSCFG_BASE     (0x40010000)
 #define SYSCFG_CFGR1    (*(volatile uint32_t*)(SYSCFG_BASE + 0x00))
@@ -35,6 +44,9 @@
 #define NVIC_BASE       (0xE000E100)
 #define NVIC_ISER       (*(volatile uint32_t*)(NVIC_BASE + 0x00))
 #define NVIC_ICER       (*(volatile uint32_t*)(NVIC_BASE + 0x80))
+
+#define NVIC_TIM14          (1 << 19)
+#define NVIC_USART2         (1 << 28)
 
 #define CRC_BASE        (0x40023000)
 #define CRC_DR          (*(volatile uint32_t*)(CRC_BASE + 0x00))
@@ -55,6 +67,15 @@
 #define USART2_ISR      (*(volatile uint32_t*)(USART2_BASE + 0x1C))
 #define USART2_RDR      (*(volatile uint32_t*)(USART2_BASE + 0x24))
 #define USART2_TDR      (*(volatile uint32_t*)(USART2_BASE + 0x28))
+
+#define USART_CR1_UE        (1 << 0)
+#define USART_CR1_RE        (1 << 2)
+#define USART_CR1_TE        (1 << 3)
+#define USART_CR1_RXFNEIE   (1 << 5)
+#define USART_ISR_RXFNE     (1 << 6)
+#define USART_ISR_TC        (1 << 6)
+#define USART_ISR_TXFNF     (1 << 7)
+#define USART_ISR_TEACK     (1 << 21)
 
 #define BIT0    (1 << 0)
 #define BIT1    (1 << 1)
@@ -91,10 +112,15 @@
 
 #define APP_MEMORY_START 0x08004000
 #define APP_MEMORY_END 0x08020000
+#define RAM_START 0x20000000
+#define RAM_END 0x20009000
 #define VECTOR_TABLE_SIZE 0xC0
-#define CHUNK_SIZE 256
-#define FIRMWARE_MAX_SIZE 20000
+#define CHUNK_SIZE 512
+#define FIRMWARE_MAX_SIZE 30000
 #define BOOTLOADER_WAIT_TIME 3
+#define BR_115200 0x8B
+#define BR_230400 0x45
+#define BR_460800 0x23
 
 typedef enum{
     BLSTATE_IDLE,
