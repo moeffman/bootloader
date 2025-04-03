@@ -421,7 +421,6 @@ static void jump_to_application(void)
         sram_vector[i] = app_vector[i];
     }
 
-    usart_send_string("when is this happening?\r\n");
     uint32_t app_stack = app_vector[0];
     uint32_t app_reset = app_vector[1];
 
