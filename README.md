@@ -1,20 +1,9 @@
-# STM32G0 Bootloader
+# bootloader
 
-A lightweight USART-based bootloader for STM32G0 microcontrollers.
+A simple STM32G071RB bootloader written in bare-metal C.
 
-## Features
+- Receives firmware over USART (using the python script in flash)
+- Validates with CRC32 before jumping to application
 
-- UART (USART) firmware update
-- CRC32 validation using STM32 hardware CRC
-- Flash programming and jump to application
-- Minimal startup code and linker script
-- Works with Python upload script
+WIP. A proper README coming at a later date
 
-## Hardware
-
-- Tested on STM32G071RB Nucleo board
-- Should work on other STM32G0 series with minimal changes
-
-## Getting Started
-
-WIP
