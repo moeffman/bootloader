@@ -17,7 +17,4 @@ A lightweight USART-based bootloader for STM32G0 microcontrollers.
 
 ## Getting Started
 
-### Build
-
-```bash
-make
+WIP
