@@ -19,13 +19,14 @@ OBJCOPY  = arm-none-eabi-objcopy
 # ================================
 # Compilation Flags
 # ================================
-MCUFLAGS   = -mcpu=cortex-m0plus -mthumb
-CORE_CFLAGS = -nostdlib -nostartfiles
-DEBUGFLAGS  = -g -Wall -Wpedantic -Werror -fstack-usage
-INCLUDES    = -I$(INC_DIR)
-SPECS       = -specs=nosys.specs -specs=nano.specs
-CFLAGS      = $(MCUFLAGS) $(CORE_CFLAGS) $(DEBUGFLAGS) $(INCLUDES) $(SPECS)
-LDFLAGS     = -T $(LINKER)
+MCUFLAGS     = -mcpu=cortex-m0plus -mthumb
+CORE_CFLAGS  = -nostdlib -nostartfiles
+DEBUGFLAGS   = -g -Wall -Wpedantic -Werror -fstack-usage
+INCLUDES     = -I$(INC_DIR)
+OPTIMIZATION = -Os
+SPECS        = -specs=nosys.specs -specs=nano.specs
+CFLAGS       = $(MCUFLAGS) $(CORE_CFLAGS) $(DEBUGFLAGS) $(INCLUDES) $(SPECS) $(OPTIMIZATION)
+LDFLAGS      = -T $(LINKER)
 
 # ================================
 # Source Files and Objects

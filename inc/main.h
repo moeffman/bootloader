@@ -8,6 +8,7 @@
 #define BOOTLOADER_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
 #define FLASH_BASE      (0x40022000)
 #define FLASH_KEYR      (*(volatile uint32_t*)(FLASH_BASE + 0x08))
@@ -33,7 +34,10 @@
 
 #define GPIOA_BASE      (0x50000000)
 #define GPIOA_MODER     (*(volatile uint32_t*)(GPIOA_BASE + 0x00))
+#define GPIOA_OTYPER    (*(volatile uint32_t*)(GPIOA_BASE + 0x04))
 #define GPIOA_OSPEEDR   (*(volatile uint32_t*)(GPIOA_BASE + 0x08))
+#define GPIOA_ODR       (*(volatile uint32_t*)(GPIOA_BASE + 0x14))
+#define GPIOA_BSSR      (*(volatile uint32_t*)(GPIOA_BASE + 0x18))
 #define GPIOA_AFRL      (*(volatile uint32_t*)(GPIOA_BASE + 0x20))
 
 #define GPIO_MODER_AF       (0x3)
@@ -53,12 +57,13 @@
 #define CRC_CR          (*(volatile uint32_t*)(CRC_BASE + 0x08))
 
 #define TIM14_BASE      (0x40002000)
-#define TIM14_CR1       (*(volatile uint16_t*)(TIM14_BASE + 0x00))
-#define TIM14_DIER      (*(volatile uint16_t*)(TIM14_BASE + 0x0C))
-#define TIM14_SR        (*(volatile uint16_t*)(TIM14_BASE + 0x10))
-#define TIM14_EGR       (*(volatile uint16_t*)(TIM14_BASE + 0x14))
-#define TIM14_PSC       (*(volatile uint16_t*)(TIM14_BASE + 0x28))
-#define TIM14_ARR       (*(volatile uint16_t*)(TIM14_BASE + 0x2C))
+#define TIM14_CR1       (*(volatile uint32_t*)(TIM14_BASE + 0x00))
+#define TIM14_DIER      (*(volatile uint32_t*)(TIM14_BASE + 0x0C))
+#define TIM14_SR        (*(volatile uint32_t*)(TIM14_BASE + 0x10))
+#define TIM14_EGR       (*(volatile uint32_t*)(TIM14_BASE + 0x14))
+#define TIM14_CNT       (*(volatile uint32_t*)(TIM14_BASE + 0x24))
+#define TIM14_PSC       (*(volatile uint32_t*)(TIM14_BASE + 0x28))
+#define TIM14_ARR       (*(volatile uint32_t*)(TIM14_BASE + 0x2C))
 
 #define USART2_BASE     (0x40004400)
 #define USART2_CR1      (*(volatile uint32_t*)(USART2_BASE + 0x00))
@@ -115,26 +120,51 @@
 #define RAM_START 0x20000000
 #define RAM_END 0x20009000
 #define VECTOR_TABLE_SIZE 0xC0
-#define CHUNK_SIZE 512
-#define FIRMWARE_MAX_SIZE 30000
-#define BOOTLOADER_WAIT_TIME 3
+
 #define BR_115200 0x8B
 #define BR_230400 0x45
 #define BR_460800 0x23
+
+#define FIRMWARE_MAX_SIZE 30000
+#define BOOTLOADER_WAIT_TIME 30
 
 typedef enum{
     BLSTATE_IDLE,
     BLSTATE_UPDATING,
     BLSTATE_FLASHRW,
-    BLSTATE_JUMPTOAPP,
 } bootloader_state_t;
 
-typedef enum{
-    USTATE_HANDSHAKE,
-    USTATE_SIZE,
-    USTATE_FILE,
-    USTATE_CRC,
-} update_state_t;
+#define CHUNK_SIZE 256
+#define PACKET_HEADER_SIZE 8
+#define PACKET_DATA_SIZE 256
+#define PACKET_TOTAL_SIZE (PACKET_HEADER_SIZE + PACKET_DATA_SIZE)
+
+// SEQUENCE MAPPINGS
+#define SEQ_UPDATE          1
+#define SEQ_HANDSHAKE       2
+#define SEQ_HANDSHAKE_ACK   3
+#define SEQ_SIZE            4
+#define SEQ_SIZE_ACK        5
+#define SEQ_DATA_START      100
+#define SEQ_DATA_END        65532
+#define SEQ_CRC             65533
+#define SEQ_CRC_ACK         65534
+#define SEQ_FINISHED        65535
+
+// len will neet to be a uint32_t to allow for binaries larger than 65kb
+// bootloader will need to allow partial flash writes before that, since 
+// ram will be a bottleneck
+typedef struct{
+    uint16_t seq;       // Sequence number
+    uint16_t len;       // Number of bytes to read from data
+    uint32_t crc;       // Checksum
+    uint8_t data[PACKET_DATA_SIZE];
+} Packet_t;
+
+typedef union{
+    Packet_t packet;
+    uint8_t bytes[PACKET_TOTAL_SIZE];
+} BTP_t;
 
 int main(void);
 
