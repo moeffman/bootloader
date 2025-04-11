@@ -6,7 +6,7 @@
 
 #include "main.h"
 
-static volatile uint8_t application_start_timer = BOOTLOADER_WAIT_TIME;
+static volatile uint8_t application_start_timer = BOOTLOADER_WAIT_TIME_500MS;
 static volatile uint8_t data_buffer[264];
 static volatile uint16_t data_buffer_index = 0;
 static volatile bool retransmit_requested = false;
@@ -19,12 +19,10 @@ static void deinit_peripherals(void);
 static void flash_unlock(void);
 static void flash_lock(void);
 static void flash_page_erase(uint32_t address);
-static void flash_region_erase(uint32_t start, uint32_t end);
-static void flash_erase(void);
+static void flash_region_erase(uint32_t start, uint32_t firmware_size);
 static void flash_write_64(uint32_t address, const uint8_t* buffer, uint32_t buffer_length);
 
-static void firmware_update(uint32_t firmware_size, const uint8_t* firmware_data);
-static uint32_t calculate_checksum(uint32_t firmware_size, const uint8_t* firmware_data);
+/*static uint32_t calculate_checksum(uint32_t firmware_size, const uint8_t* firmware_data);*/
 static void jump_to_application(void);
 
 static inline bool packet_received(uint16_t len, bool length_extracted);
@@ -33,8 +31,8 @@ static void packet_encode(Packet_t* packet, uint16_t seq, uint16_t len, const ui
 static bool packet_decode(Packet_t* packet);
 static void process_handshake(BTP_t* incoming, BTP_t* outgoing);
 static void process_size(BTP_t* incoming, BTP_t* outgoing, uint32_t* const firmware_size);
-static void process_firmware_chunk(BTP_t* incoming, BTP_t* outgoing, uint8_t* const firmware_data);
-static void process_crc(BTP_t* incoming, BTP_t* outgoing, uint32_t* const received_crc);
+static void process_firmware_chunk(BTP_t* incoming, BTP_t* outgoing);
+/*static void process_crc(BTP_t* incoming, BTP_t* outgoing, uint32_t* const received_crc);*/
 static inline void update_saved_btp(BTP_t* saved_btp, BTP_t* outgoing);
 static inline void clear_incoming_btp(BTP_t* incoming);
 
@@ -51,15 +49,12 @@ static bool strings_match(const char* str1, const char* str2);
 int main(void)
 {
     BTP_t outgoing_btp = {0};
-    Packet_t* outgoing_packet = &outgoing_btp.packet;
-    uint8_t* outgoing_bytes = outgoing_btp.bytes;
     BTP_t incoming_btp = {0};
     Packet_t* incoming_packet = &incoming_btp.packet;
     BTP_t saved_btp = {0};
 
-    static uint8_t firmware_data[FIRMWARE_MAX_SIZE];
     uint32_t firmware_size = 0;
-    uint32_t received_crc = 0;
+    /*uint32_t received_crc = 0;*/
     bool length_extracted = false;
 
     init_peripherals();
@@ -69,13 +64,13 @@ int main(void)
             jump_to_application();
         }
 
-        // Parsing packet header when first 8 bytes are received
+        // Parsing packet header when at least 8 bytes have been received
         packet_get_length(incoming_packet, &length_extracted);
 
         // Checking if we received a full packet (data >= len)
         if(packet_received(incoming_packet->len, length_extracted)){
             length_extracted = false;
-            application_start_timer = BOOTLOADER_WAIT_TIME;
+            application_start_timer = BOOTLOADER_WAIT_TIME_500MS;
 
             // Checking if packet is valid
             if(!packet_decode(incoming_packet)){
@@ -94,29 +89,23 @@ int main(void)
                     break;
                 case SEQ_SIZE:
                     process_size(&incoming_btp, &outgoing_btp, &firmware_size);
-
-                    if(firmware_size > FIRMWARE_MAX_SIZE){
-                        usart_send_btp_string("Error: Firmware too large, exiting\r\n");
-                        usart_send_btp_ack(outgoing_packet, outgoing_bytes, SEQ_FINISHED);
-                        updating = false;
-                    }
                     break;
-                case SEQ_CRC:
-                    process_crc(&incoming_btp, &outgoing_btp, &received_crc);
+                case SEQ_CRC: // TODO: This case can be deleted if CRC over binary isn't reimplemented
+                    updating = false;
+                    /*process_crc(&incoming_btp, &outgoing_btp, &received_crc);*/
 
-                    if(received_crc == calculate_checksum(firmware_size, firmware_data)){
-                        firmware_update(firmware_size, firmware_data);
-                    }else{
-                        usart_send_btp_string("Error: Firmware CRC did not match, exiting\r\n");
-                        usart_send_btp_ack(outgoing_packet, outgoing_bytes, SEQ_FINISHED);
-                        updating = false;
-                    }
+                    usart_send_btp_string("Flash written!\r\n");
+                    flash_lock();
+                    usart_send_btp_string("Firmware update completed, starting application..\r\n");
+
+                    jump_to_application();
                     break;
             }
 
             if(incoming_packet->seq >= SEQ_DATA_START && incoming_packet->seq <= SEQ_DATA_END){
-                process_firmware_chunk(&incoming_btp, &outgoing_btp, firmware_data);
+                process_firmware_chunk(&incoming_btp, &outgoing_btp);
             }
+
             update_saved_btp(&saved_btp, &outgoing_btp);
             clear_incoming_btp(&incoming_btp);
         }
@@ -149,64 +138,44 @@ static void init_peripherals(void)
     //
     // GPIOA
     //
-    GPIOA_MODER &= ~BIT4;
-    GPIOA_MODER |= BIT5;
-    GPIOA_MODER &= ~BIT6;
-    GPIOA_MODER |= BIT7;
+    GPIOA_MODER &= ~GPIO_MODER_MSK(2);
+    GPIOA_MODER |= GPIO_MODER(2, GPIO_MODER_AF);
+    GPIOA_MODER &= ~GPIO_MODER_MSK(3);
+    GPIOA_MODER |= GPIO_MODER(3, GPIO_MODER_AF);
 
-    GPIOA_OSPEEDR &= ~BIT4;
-    GPIOA_OSPEEDR |= BIT5;
-    GPIOA_OSPEEDR &= ~BIT6;
-    GPIOA_OSPEEDR |= BIT7;
-
-    GPIOA_AFRL &= ~(0x3 << 9);
-    GPIOA_AFRL |= BIT8;
-    GPIOA_AFRL &= ~(0x3 << 13);
-    GPIOA_AFRL |= BIT12;
-
-    // PA_12 Output
-    GPIOA_MODER |= BIT24;
-    GPIOA_MODER &= ~BIT25;
-
-    GPIOA_OSPEEDR |= BIT24;
-    GPIOA_OSPEEDR |= BIT25;
-
-    GPIOA_OTYPER &= ~BIT12;
-
+    GPIOA_AFRL &= ~GPIO_AFRL_MSK(2);
+    GPIOA_AFRL |= GPIO_AFRL(2, GPIO_AF1);
+    GPIOA_AFRL &= ~GPIO_AFRL_MSK(3);
+    GPIOA_AFRL |= GPIO_AFRL(3, GPIO_AF1);
 
     //
     // USART2
     //
-    // USART Disable
     USART2_CR1 &= ~USART_CR1_UE;
     USART2_CR1 |= USART_CR1_RE;
     USART2_CR1 |= USART_CR1_TE;
     USART2_CR1 |= USART_CR1_RXFNEIE;
-
-    // BRR USARTDIV = FREQ/BAUDRATE
-    // 16Mhz / 115200 = 139 = 0x8B
     USART2_BRR = BR_460800;
-
-    // USART Enable
     USART2_CR1 |= USART_CR1_UE;
 
     //
     // TIM14
     //
-    TIM14_CR1 &= ~BIT0;
-    TIM14_PSC = 0x3E7F; // 15999 => 1000Hz
-    TIM14_ARR = 0x5; // 5, making it fire every ~6ms
-    TIM14_EGR |= BIT0;
-    TIM14_SR &= ~BIT0;
+    TIM14_CR1 &= ~TIM_CR1_CEN;
+    TIM14_PSC = TIMER_PRESCALAR_1000HZ;
+    TIM14_ARR = RETRANSMISSION_INTERVAL_10MS;
+    TIM14_EGR |= TIM_EGR_UG;
+    TIM14_SR &= ~TIM_SR_UIF;
     TIM14_CNT = 0;
-    TIM14_DIER |= BIT0;
-    TIM14_CR1 |= BIT0;
+    TIM14_DIER |= TIM_DIER_UIE;
+    TIM14_CR1 |= TIM_CR1_CEN;
 
     //
     // CRC
     //
-    CRC_CR |= BIT7;         // Bit-reversed
-    CRC_CR |= (0x3 << 5);   // Bit reversal done by word
+    CRC_CR |= CRC_CR_REV_OUT;     // Bit-reversed
+    CRC_CR &= ~CRC_CR_REV_IN_MSK;
+    CRC_CR |= CRC_CR_REV_IN(0x3); // Bit reversal done by word
 
     //
     // NVIC
@@ -271,75 +240,91 @@ static void deinit_peripherals(void)
     RCC_APBENR2 &= ~RCC_TIM14;
 
     // NVIC
-    // TIM_14
-    NVIC_ICER = BIT19;
-    // USART2
-    NVIC_ICER = BIT28;
+    NVIC_ICER = NVIC_TIM14;
+    NVIC_ICER = NVIC_USART2;
 }
 
 static void flash_unlock()
 {
-    if(FLASH_CR & BIT31){
+    if(FLASH_CR & FLASH_CR_LOCK){
         // Unlock sequence
         FLASH_KEYR = 0x45670123;
         FLASH_KEYR = 0xCDEF89AB;
-        while(FLASH_CR & BIT31);
+        while(FLASH_CR & FLASH_CR_LOCK);
     }
 }
 
 static void flash_lock()
 {
     // Setting CR_LOCK
-    FLASH_CR |= BIT31;
+    FLASH_CR |= FLASH_CR_LOCK;
 }
 
 static void flash_page_erase(uint32_t address)
 {
-    // Ensuring SR_BSY1 flag is 0
-    while(FLASH_SR & BIT16);
+    while(FLASH_SR & FLASH_SR_BSY1);
 
-    // Setting CR_PER
-    FLASH_CR |= BIT1;
-    // Clearing CR_PNB
-    FLASH_CR &= ~(0x3FF << 3);
-    // Setting CR_PNB
-    FLASH_CR |= (((address - 0x08000000) / 0x800) << 3);
+    FLASH_CR |= FLASH_CR_PER;
+    FLASH_CR &= ~FLASH_CR_PNB_MSK;
+    FLASH_CR |= FLASH_CR_PNB((address - 0x08000000) / FLASH_PAGE_SIZE);
+    FLASH_CR |= FLASH_CR_STRT;
 
-    // Setting CR_STRT
-    FLASH_CR |= BIT16;
+    while(FLASH_SR & FLASH_SR_BSY1);
 
-    // Ensuring SR_BSY1 flag is 0
-    while(FLASH_SR & BIT16);
-    // Resetting CR_PER
-    FLASH_CR &= ~BIT1;
+    if (FLASH_SR & (FLASH_SR_PROGERR |
+                    FLASH_SR_WRPERR |
+                    FLASH_SR_PGAERR |
+                    FLASH_SR_SIZERR |
+                    FLASH_SR_PGSERR
+                    )){
+
+        usart_send_btp_string("Erase error flags at address ");
+        usart_send_btp_number(address);
+        usart_send_btp_string("\r\n");
+    }
+
+    FLASH_CR &= ~FLASH_CR_PER;
+    if (*(volatile uint32_t*)(address) != 0xFFFFFFFF) {
+        usart_send_btp_string("Erase verification failed at address ");
+        usart_send_btp_number(address);
+        usart_send_btp_string("\r\n");
+    }
 }
 
-static void flash_region_erase(uint32_t start, uint32_t end)
+static void flash_region_erase(uint32_t start, uint32_t firmware_size)
 {
-    for(uint32_t i = start; i < end; i += 0x800){
+    uint32_t end = APP_MEMORY_START + ((firmware_size + FLASH_PAGE_SIZE - 1) & (~FLASH_PAGE_SIZE - 1));
+    end += FLASH_PAGE_SIZE;
+    for(uint32_t i = start, j = 0; i < end; i += FLASH_PAGE_SIZE, j++){
         flash_page_erase(i);
     }
 }
 
-static void flash_erase()
-{
-    flash_region_erase(APP_MEMORY_START, APP_MEMORY_END);
-}
-
 static void flash_write_64(uint32_t address, const uint8_t* buffer, uint32_t buffer_length)
 {
+    if (buffer_length == 0){
+        return;
+    }
+
     uint32_t full_chunks = buffer_length / 8;
     uint32_t remaining = buffer_length % 8;
-    // Ensuring SR_BSY1 flag is 0
-    while(FLASH_SR & BIT16);
 
-    // Clearing error flags
-    FLASH_CR |= BIT3 | BIT4 | BIT5 | BIT6 | BIT7;
+    while(FLASH_SR & FLASH_SR_BSY1);
 
-    // Setting CR_PG
-    FLASH_CR |= BIT0;
+    // Checking error flags
+    if (FLASH_SR & (FLASH_SR_PROGERR |
+                    FLASH_SR_WRPERR |
+                    FLASH_SR_PGAERR |
+                    FLASH_SR_SIZERR |
+                    FLASH_SR_PGSERR
+                    )){
+        usart_send_btp_string("Write error flags at address ");
+        usart_send_btp_number(address);
+        usart_send_btp_string("\r\n");
+    }
 
-    // Writing data
+    FLASH_CR |= FLASH_CR_PG;
+
     for(uint32_t i = 0; i < full_chunks; i++, address+=8){
         uint32_t word1 = buffer[i * 8] |
                         (buffer[i * 8 + 1] << 8)  |
@@ -354,8 +339,7 @@ static void flash_write_64(uint32_t address, const uint8_t* buffer, uint32_t buf
         *(volatile uint32_t*)(address) =  word1;
         *(volatile uint32_t*)(address+4) =  word2;
 
-        // Ensuring SR_BSY1 flag is 0
-        while(FLASH_SR & BIT16);
+        while(FLASH_SR & FLASH_SR_BSY1);
     }
 
     // Writing any remaining non-full chunk
@@ -373,47 +357,13 @@ static void flash_write_64(uint32_t address, const uint8_t* buffer, uint32_t buf
         *(volatile uint32_t*)(address+4) =  word2;
 
         // Ensuring SR_BSY1 flag is 0
-        while(FLASH_SR & BIT16);
+        while(FLASH_SR & FLASH_SR_BSY1);
     }
 
     // Resetting CR_PG
-    FLASH_CR &= ~BIT0;
+    FLASH_CR &= ~FLASH_CR_PG;
 }
 
-static void firmware_update(uint32_t firmware_size, const uint8_t* firmware_data)
-{
-        // Erase old firmware
-        flash_unlock();
-        flash_erase();
-
-        // Write new firmware
-        flash_write_64(APP_MEMORY_START, firmware_data, firmware_size);
-        usart_send_btp_string("Flash written!\r\n");
-        flash_lock();
-        usart_send_btp_string("Firmware update completed, starting application..\r\n");
-
-        jump_to_application();
-}
-
-static uint32_t calculate_checksum(uint32_t firmware_size, const uint8_t* firmware_data)
-{
-    CRC_CR |= BIT0; // Reset CRC
-
-    for(uint32_t i = 0; i < firmware_size; i+=4){
-        uint32_t word = 0;
-
-        word |= firmware_data[i];
-        word |= (i + 1 < firmware_size) ? firmware_data[i + 1] << 8 : 0xFF << 8;
-        word |= (i + 2 < firmware_size) ? firmware_data[i + 2] << 16 : 0xFF << 16;
-        word |= (i + 3 < firmware_size) ? firmware_data[i + 3] << 24 : 0xFF << 24;
-
-        // CRC data
-        CRC_DR = word;
-    }
-    return CRC_DR ^ 0xFFFFFFFF;
-}
-
-__attribute__((noreturn))
 static void jump_to_application(void)
 {
     // Disable IRQs
@@ -422,12 +372,13 @@ static void jump_to_application(void)
     uint32_t* app_vector = (uint32_t*)(APP_MEMORY_START);
     uint32_t* sram_vector = (uint32_t*)(0x20000000);
 
-    // RCC enable SYSCFG
-    RCC_APBENR2 |= BIT0;
-
-    // SYSCFG_CFGR1 MEM_MODE
-    SYSCFG_CFGR1 &= ~0x3;
-    SYSCFG_CFGR1 |= 0x3;
+    /*
+     * No VTOR, so we use SYSCFG MEM_MODE to copy the vector table and
+     * stack address to RAM and then map RAM to 0x00000000
+     */
+    RCC_APBENR2 |= RCC_SYSCFG;
+    SYSCFG_CFGR1 &= ~SYSCFG_CFGR1_MEM_MODE_MSK;
+    SYSCFG_CFGR1 |= SYSCFG_CFGR1_MEM_MODE(SYSCFG_MEM_MODE_SRAM);
 
     for(uint32_t i = 0; i < VECTOR_TABLE_SIZE / 4; i++){
         sram_vector[i] = app_vector[i];
@@ -438,14 +389,14 @@ static void jump_to_application(void)
 
     if (app_reset < APP_MEMORY_START || app_reset > APP_MEMORY_END){
         usart_send_btp_string("Invalid reset location. Aborting\r\n");
-        usart_send_btp_string("app_reset = ");
+        usart_send_btp_string("Reset location:");
         usart_send_btp_number(app_reset);
         usart_send_btp_string("\r\n");
         while(1);
     }
     if (app_stack < RAM_START || app_stack > RAM_END){
         usart_send_btp_string("Invalid stack location. Aborting\r\n");
-        usart_send_btp_string("app_stack = ");
+        usart_send_btp_string("Stack location:");
         usart_send_btp_number(app_stack);
         usart_send_btp_string("\r\n");
         while(1);
@@ -459,13 +410,20 @@ static void jump_to_application(void)
 
     deinit_peripherals();
 
-    // Perform MSP setup and jump in a single assembly block
+    /*
+     * Perform MSP setup and jump in a single assembly block.
+     * Used to do this using a function pointer, pointing to
+     * app_reset, but with optimization level -Os, it seems
+     * the optimizer prefered keeping the app_reset on the stack,
+     * which lead to some interesting results when moving the stack
+     * pointer before being able to use that address 
+     */
     __asm volatile (
-        "msr msp, %0\n\t"    // Set MSP to app_stack
-        "bx %1\n\t"          // Jump to app_reset (using bx to ensure Thumb mode)
-        :                    // No outputs
-        : "r" (app_stack), "r" (app_reset) // Inputs
-        :                    // No clobbers needed
+        "msr msp, %0\n\t"
+        "bx %1\n\t"
+        :                                   // No outputs
+        : "r" (app_stack), "r" (app_reset)  // Inputs
+        :                                   // No clobbers
     );
 
     while(1); // Unreachable
@@ -502,9 +460,7 @@ static bool packet_decode(Packet_t* packet)
         packet->data[i] = data_buffer[8 + i];
     }
 
-    data_buffer_index = 0;
-
-    CRC_CR |= BIT0; // Reset CRC
+    CRC_CR |= CRC_CR_RESET;
     CRC_DR = packet->seq | packet->len << 16;
 
     for(uint32_t i = 0; i < packet->len; i += 4){
@@ -519,6 +475,7 @@ static bool packet_decode(Packet_t* packet)
         CRC_DR = word;
     }
 
+    data_buffer_index = 0;
     return (CRC_DR ^ 0xFFFFFFFF) == packet->crc;
 }
 
@@ -527,12 +484,11 @@ static void packet_encode(Packet_t* packet, uint16_t seq, uint16_t len, const ui
     packet->seq = seq;
     packet->len = len;
 
-
     for(uint8_t i = 0; i < packet->len; i++){
         packet->data[i] = data[i];
     }
 
-    CRC_CR |= BIT0; // Reset CRC
+    CRC_CR |= CRC_CR_RESET;
     CRC_DR = packet->seq | packet->len << 16;
 
     for(uint32_t i = 0; i < packet->len; i+=4){
@@ -563,26 +519,39 @@ static void process_size(BTP_t* incoming, BTP_t* outgoing, uint32_t* const firmw
     for(uint8_t i = 0; i < incoming->packet.len; i++){
         *firmware_size |= incoming->packet.data[i] << (8 * i);
     }
+
+    if(*firmware_size > FIRMWARE_MAX_SIZE){
+        usart_send_btp_string("Error: Firmware too large, exiting\r\n");
+        usart_send_btp_ack(&outgoing->packet, outgoing->bytes, SEQ_FINISHED);
+        updating = false;
+        return;
+    }
+
+    // Disabling timer during flash erase to avoid sending repeat messages
+    TIM14_CR1 &= ~TIM_CR1_CEN;
+    flash_unlock();
+    flash_region_erase(APP_MEMORY_START, *firmware_size);
+    TIM14_CR1 |= TIM_CR1_CEN;
+
     usart_send_btp_ack(&outgoing->packet, outgoing->bytes, SEQ_SIZE_ACK);
 }
 
-static void process_firmware_chunk(BTP_t* incoming, BTP_t* outgoing, uint8_t* const firmware_data)
+static void process_firmware_chunk(BTP_t* incoming, BTP_t* outgoing)
 {
-    uint32_t chunk_start = (incoming->packet.seq - SEQ_DATA_START) * CHUNK_SIZE;
-    for(uint16_t i = 0; i < incoming->packet.len; i++){
-        firmware_data[chunk_start + i] = incoming->packet.data[i];
-    }
+    uint32_t address = APP_MEMORY_START + (incoming->packet.seq - SEQ_DATA_START) * CHUNK_SIZE;
+    flash_write_64(address, incoming->packet.data, incoming->packet.len);
+
     usart_send_btp_ack(&outgoing->packet, outgoing->bytes, incoming->packet.seq);
 }
 
-static void process_crc(BTP_t* incoming, BTP_t* outgoing, uint32_t* const received_crc)
-{
-    *received_crc = 0;
-    for(uint16_t i = 0; i < incoming->packet.len; i++){
-        *received_crc |= incoming->packet.data[i] << (8 * i);
-    }
-    usart_send_btp_ack(&outgoing->packet, outgoing->bytes, SEQ_CRC_ACK);
-}
+/*static void process_crc(BTP_t* incoming, BTP_t* outgoing, uint32_t* const received_crc)*/
+/*{*/
+/*    *received_crc = 0;*/
+/*    for(uint16_t i = 0; i < incoming->packet.len; i++){*/
+/*        *received_crc |= incoming->packet.data[i] << (8 * i);*/
+/*    }*/
+/*    usart_send_btp_ack(&outgoing->packet, outgoing->bytes, SEQ_CRC_ACK);*/
+/*}*/
 
 static inline void update_saved_btp(BTP_t* saved_btp, BTP_t* outgoing)
 {
@@ -630,7 +599,7 @@ static void usart_send_btp_string(const char* string)
 
     // len
     usart_send_byte(len & 0xFF);
-    usart_send_byte((len << 8) & 0xFF);
+    usart_send_byte((len >> 8) & 0xFF);
 
     // crc = 0
     usart_send_byte(0);
@@ -715,7 +684,7 @@ void USART2_LPUART2_IRQHandler(void)
 void TIM14_IRQHandler(void)
 {
     // Clearing update interrupt flag
-    TIM14_SR &= ~BIT0;
+    TIM14_SR &= ~TIM_SR_UIF;
 
     if(updating){
         retransmit_requested = true;
