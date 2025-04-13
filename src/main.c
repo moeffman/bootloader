@@ -5,13 +5,14 @@
  */
 
 #include "main.h"
+#include <stdint.h>
 
 static volatile uint8_t application_start_timer = BOOTLOADER_WAIT_TIME_500MS;
 static volatile uint8_t data_buffer[264];
 static volatile uint16_t data_buffer_index = 0;
 static volatile bool retransmit_requested = false;
 static volatile bool update_message_requested = false;
-static volatile bool updating = false;
+static bool updating = false;
 
 static void init_peripherals(void);
 static void deinit_peripherals(void);
@@ -22,9 +23,7 @@ static void flash_page_erase(uint32_t address);
 static void flash_region_erase(uint32_t start, uint32_t firmware_size);
 static void flash_write_64(uint32_t address, const uint8_t* buffer, uint32_t buffer_length);
 
-/*static uint32_t calculate_checksum(uint32_t firmware_size, const uint8_t* firmware_data);*/
 static void jump_to_application(void);
-
 static inline bool packet_received(uint16_t len, bool length_extracted);
 static inline void packet_get_length(Packet_t* packet, bool* length_extracted);
 static void packet_encode(Packet_t* packet, uint16_t seq, uint16_t len, const uint8_t* data);
@@ -32,7 +31,7 @@ static bool packet_decode(Packet_t* packet);
 static void process_handshake(BTP_t* incoming, BTP_t* outgoing);
 static void process_size(BTP_t* incoming, BTP_t* outgoing, uint32_t* const firmware_size);
 static void process_firmware_chunk(BTP_t* incoming, BTP_t* outgoing);
-/*static void process_crc(BTP_t* incoming, BTP_t* outgoing, uint32_t* const received_crc);*/
+static bool crc_verified(BTP_t* incoming, BTP_t* outgoing, uint32_t firmware_size);
 static inline void update_saved_btp(BTP_t* saved_btp, BTP_t* outgoing);
 static inline void clear_incoming_btp(BTP_t* incoming);
 
@@ -54,7 +53,6 @@ int main(void)
     BTP_t saved_btp = {0};
 
     uint32_t firmware_size = 0;
-    /*uint32_t received_crc = 0;*/
     bool length_extracted = false;
 
     init_peripherals();
@@ -90,22 +88,21 @@ int main(void)
                 case SEQ_SIZE:
                     process_size(&incoming_btp, &outgoing_btp, &firmware_size);
                     break;
-                case SEQ_CRC: // TODO: This case can be deleted if CRC over binary isn't reimplemented
-                    updating = false;
-                    /*process_crc(&incoming_btp, &outgoing_btp, &received_crc);*/
-
-                    usart_send_btp_string("Flash written!\r\n");
+                case SEQ_CRC:
                     flash_lock();
-                    usart_send_btp_string("Firmware update completed, starting application..\r\n");
-
-                    jump_to_application();
+                    if(crc_verified(&incoming_btp, &outgoing_btp, firmware_size)){
+                        usart_send_btp_string("Firmware update completed, starting application..\r\n");
+                        jump_to_application();
+                    }else{
+                        updating = false;
+                        usart_send_btp_string("CRC did not match, exiting..\r\n");
+                        usart_send_btp_ack(&outgoing_btp.packet, outgoing_btp.bytes, SEQ_FINISHED);
+                    }
                     break;
             }
-
             if(incoming_packet->seq >= SEQ_DATA_START && incoming_packet->seq <= SEQ_DATA_END){
                 process_firmware_chunk(&incoming_btp, &outgoing_btp);
             }
-
             update_saved_btp(&saved_btp, &outgoing_btp);
             clear_incoming_btp(&incoming_btp);
         }
@@ -356,11 +353,8 @@ static void flash_write_64(uint32_t address, const uint8_t* buffer, uint32_t buf
         *(volatile uint32_t*)(address) =  word1;
         *(volatile uint32_t*)(address+4) =  word2;
 
-        // Ensuring SR_BSY1 flag is 0
         while(FLASH_SR & FLASH_SR_BSY1);
     }
-
-    // Resetting CR_PG
     FLASH_CR &= ~FLASH_CR_PG;
 }
 
@@ -405,7 +399,7 @@ static void jump_to_application(void)
     // Sending a last ACK to tell the python script to stop listening
     BTP_t btp;
     char* msg = "ACK";
-    packet_encode(&btp.packet, 65535, string_length(msg), (uint8_t*)msg);
+    packet_encode(&btp.packet, SEQ_FINISHED, string_length(msg), (uint8_t*)msg);
     usart_send_btp(btp.packet.len, btp.bytes);
 
     deinit_peripherals();
@@ -460,6 +454,7 @@ static bool packet_decode(Packet_t* packet)
         packet->data[i] = data_buffer[8 + i];
     }
 
+    CRC_INIT = 0xFFFFFFFF;
     CRC_CR |= CRC_CR_RESET;
     CRC_DR = packet->seq | packet->len << 16;
 
@@ -488,6 +483,7 @@ static void packet_encode(Packet_t* packet, uint16_t seq, uint16_t len, const ui
         packet->data[i] = data[i];
     }
 
+    CRC_INIT = 0xFFFFFFFF;
     CRC_CR |= CRC_CR_RESET;
     CRC_DR = packet->seq | packet->len << 16;
 
@@ -544,14 +540,37 @@ static void process_firmware_chunk(BTP_t* incoming, BTP_t* outgoing)
     usart_send_btp_ack(&outgoing->packet, outgoing->bytes, incoming->packet.seq);
 }
 
-/*static void process_crc(BTP_t* incoming, BTP_t* outgoing, uint32_t* const received_crc)*/
-/*{*/
-/*    *received_crc = 0;*/
-/*    for(uint16_t i = 0; i < incoming->packet.len; i++){*/
-/*        *received_crc |= incoming->packet.data[i] << (8 * i);*/
-/*    }*/
-/*    usart_send_btp_ack(&outgoing->packet, outgoing->bytes, SEQ_CRC_ACK);*/
-/*}*/
+static bool crc_verified(BTP_t* incoming, BTP_t* outgoing, uint32_t firmware_size)
+{
+    uint32_t received_crc = 0;
+    for(uint16_t i = 0; i < incoming->packet.len; i++){
+        received_crc |= incoming->packet.data[i] << (8 * i);
+    }
+
+    CRC_INIT = 0xFFFFFFFF;
+    CRC_CR |= CRC_CR_RESET;
+
+    uint8_t* addr = (uint8_t*)APP_MEMORY_START;
+
+    for(uint32_t i = 0; i < firmware_size; i+=4){
+        uint32_t word = 0;
+
+        word |= addr[i];
+        word |= (i + 1 < firmware_size) ? addr[i + 1] << 8 : 0xFF << 8;
+        word |= (i + 2 < firmware_size) ? addr[i + 2] << 16 : 0xFF << 16;
+        word |= (i + 3 < firmware_size) ? addr[i + 3] << 24 : 0xFF << 24;
+
+        // CRC data
+        CRC_DR = word;
+    }
+
+    uint32_t crc = ~CRC_DR;
+
+    if(received_crc != crc){
+        return false;
+    }
+    return true;
+}
 
 static inline void update_saved_btp(BTP_t* saved_btp, BTP_t* outgoing)
 {
@@ -569,16 +588,11 @@ static inline void clear_incoming_btp(BTP_t* incoming)
 
 static void usart_send_byte(uint8_t byte)
 {
-    // Wait for USART2 TDR
     while(!(USART2_ISR & USART_ISR_TXFNF));
-
-    // Respecting TE minimum period
     while(!(USART2_ISR & USART_ISR_TEACK));
 
-    // Writing data to TDR
     USART2_TDR = byte;
 
-    // Waiting for Transmission Complete Flag
     while(!(USART2_ISR & USART_ISR_TC));
 }
 
@@ -683,7 +697,6 @@ void USART2_LPUART2_IRQHandler(void)
 
 void TIM14_IRQHandler(void)
 {
-    // Clearing update interrupt flag
     TIM14_SR &= ~TIM_SR_UIF;
 
     if(updating){

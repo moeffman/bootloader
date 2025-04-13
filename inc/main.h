@@ -80,6 +80,7 @@
 #define CRC_BASE                    (0x40023000)
 #define CRC_DR                      (*(volatile uint32_t*)(CRC_BASE + 0x00))
 #define CRC_CR                      (*(volatile uint32_t*)(CRC_BASE + 0x08))
+#define CRC_INIT                    (*(volatile uint32_t*)(CRC_BASE + 0x10))
 #define CRC_CR_RESET                (1 << 0)
 #define CRC_CR_REV_IN_POS           (5)
 #define CRC_CR_REV_IN(n)            (((n) & 0x3) << CRC_CR_REV_IN_POS)
@@ -144,9 +145,8 @@
 #define SEQ_SIZE            4
 #define SEQ_SIZE_ACK        5
 #define SEQ_DATA_START      100
-#define SEQ_DATA_END        65532
-#define SEQ_CRC             65533
-#define SEQ_CRC_ACK         65534
+#define SEQ_DATA_END        65533
+#define SEQ_CRC             65534
 #define SEQ_FINISHED        65535
 
 typedef struct{
