@@ -149,6 +149,8 @@
 #define SEQ_CRC                         (65534)
 #define SEQ_FINISHED                    (65535)
 
+#define MAGIC                           (0xAAFFAAFF)
+
 // Bootloader transfer protocol
 typedef struct __attribute__((packed)){
     uint16_t seq;       // Sequence number
@@ -161,6 +163,16 @@ typedef union{
     Packet_t packet;
     uint8_t bytes[PACKET_TOTAL_SIZE];
 } BTP_t;
+
+// META DATA
+typedef struct __attribute__((packed)){
+    uint32_t magic;
+    uint32_t firmware_size;
+    uint32_t firmware_crc32;
+    uint32_t entry_point;
+    uint32_t version;
+    uint8_t signature[64];
+} Metablock_t;
 
 int main(void);
 

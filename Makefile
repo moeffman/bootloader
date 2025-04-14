@@ -7,9 +7,6 @@ SRC_DIR    = src
 INC_DIR    = inc
 BUILD_DIR  = build
 
-STARTUP       = $(LIBRARY_SRC_DIR)/startup_stm32g071rb.c
-SYSCALLS      = $(LIBRARY_SRC_DIR)/syscalls.c
-
 # ================================
 # Toolchain
 # ================================
