@@ -223,7 +223,7 @@ static void deinit_peripherals(void)
     NVIC_ICER = NVIC_USART2;
 }
 
-static void flash_unlock()
+static void flash_unlock(void)
 {
     if(FLASH_CR & FLASH_CR_LOCK){
         // Unlock sequence
@@ -233,7 +233,7 @@ static void flash_unlock()
     }
 }
 
-static void flash_lock()
+static void flash_lock(void)
 {
     FLASH_CR |= FLASH_CR_LOCK;
 }
